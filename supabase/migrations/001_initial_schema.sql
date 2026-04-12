@@ -10,7 +10,7 @@ create extension if not exists "uuid-ossp";
 create table if not exists agent_jobs (
   id            uuid primary key default uuid_generate_v4(),
   user_id       uuid references auth.users(id) on delete cascade not null,
-  agent_id      text not null,                        -- e.g. 'ad-creative'
+  agent_id      text not null,                        -- e.g. 'voice-agent'
   status        text not null default 'idle'          -- idle | running | completed | error
                 check (status in ('idle', 'running', 'completed', 'error')),
   input         jsonb not null default '{}',

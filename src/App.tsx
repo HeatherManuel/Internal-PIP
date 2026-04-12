@@ -3,7 +3,7 @@ import { Layout } from '@/components/layout/Layout'
 import { Login } from '@/pages/Login'
 import { Home } from '@/pages/Home'
 import { Settings } from '@/pages/Settings'
-import { AdCreativeAgent } from '@/agents/ad-creative/AdCreativeAgent'
+import { VoiceAgent } from '@/agents/voice-agent/VoiceAgent'
 import { useAuth } from '@/hooks/useAuth'
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
@@ -35,7 +35,7 @@ export default function App() {
           }
         >
           <Route index element={<Home />} />
-          <Route path="agents/ad-creative" element={<AdCreativeAgent />} />
+          <Route path="agents/voice-agent" element={<VoiceAgent />} />
           <Route path="settings" element={<Settings />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />

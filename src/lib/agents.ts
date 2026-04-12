@@ -2,13 +2,13 @@ import { Agent } from '@/types'
 
 export const AGENTS: Agent[] = [
   {
-    id: 'ad-creative',
-    name: 'Ad Creative Agent',
-    slug: 'ad-creative',
-    description: 'Generate scroll-stopping ad creatives for Meta, Instagram, and YouTube using AI.',
-    icon: '🎨',
+    id: 'voice-agent',
+    name: 'Voice Agent',
+    slug: 'voice-agent',
+    description: 'Generate on-brand content in your voice by ingesting your content from Google Drive.',
+    icon: '🎙️',
     status: 'idle',
-    path: '/agents/ad-creative',
+    path: '/agents/voice-agent',
   },
   // Future agents added here
 ]
