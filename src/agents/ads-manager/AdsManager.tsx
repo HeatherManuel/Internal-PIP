@@ -14,11 +14,19 @@ const SUGGESTED_PROMPTS = [
   'What creative changes would improve CTR?',
 ]
 
-async function callAdsChat(messages: Message[], fetchData: boolean): Promise<string> {
+const DATE_RANGES = [
+  { label: '7 days',  days: 7  },
+  { label: '14 days', days: 14 },
+  { label: '30 days', days: 30 },
+  { label: '60 days', days: 60 },
+  { label: '90 days', days: 90 },
+]
+
+async function callAdsChat(messages: Message[], fetchData: boolean, days: number): Promise<string> {
   const res = await fetch('/api/ads-chat', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ messages, fetchData }),
+    body: JSON.stringify({ messages, fetchData, days }),
   })
   const data = await res.json() as { content?: string; error?: string }
   if (!res.ok || data.error) throw new Error(data.error ?? `HTTP ${res.status}`)
@@ -30,6 +38,7 @@ export function AdsManager() {
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [initializing, setInitializing] = useState(true)
+  const [days, setDays] = useState(30)
   const bottomRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -40,15 +49,15 @@ export function AdsManager() {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, loading])
 
-  async function runInitialAnalysis() {
+  async function runInitialAnalysis(selectedDays = days) {
     setInitializing(true)
     setMessages([])
     const userMsg: Message = {
       role: 'user',
-      content: 'Give me a performance summary of the current campaigns. Highlight what\'s working, what\'s not, and your top 3 priorities.',
+      content: `Give me a performance summary of the current campaigns (last ${selectedDays} days). Highlight what's working, what's not, and your top 3 priorities.`,
     }
     try {
-      const content = await callAdsChat([userMsg], true)
+      const content = await callAdsChat([userMsg], true, selectedDays)
       setMessages([userMsg, { role: 'assistant', content }])
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Unknown error'
@@ -72,7 +81,7 @@ export function AdsManager() {
     setLoading(true)
 
     try {
-      const content = await callAdsChat(next, false)
+      const content = await callAdsChat(next, false, days)
       setMessages([...next, { role: 'assistant', content }])
     } catch {
       setMessages([...next, { role: 'assistant', content: 'Error getting response. Please try again.' }])
@@ -87,14 +96,30 @@ export function AdsManager() {
         title="Ads Manager"
         subtitle="AI-powered Facebook Ads analysis · PIP University 2"
         actions={
-          <button
-            onClick={runInitialAnalysis}
-            disabled={initializing || loading}
-            className="flex items-center gap-2 px-3 py-1.5 text-sm text-gray-400 hover:text-gray-200 hover:bg-gray-800 rounded-lg transition-colors disabled:opacity-40"
-          >
-            <RefreshCw size={14} className={initializing ? 'animate-spin' : ''} />
-            Refresh data
-          </button>
+          <div className="flex items-center gap-2">
+            <select
+              value={days}
+              onChange={(e) => {
+                const d = Number(e.target.value)
+                setDays(d)
+                runInitialAnalysis(d)
+              }}
+              disabled={initializing || loading}
+              className="text-sm bg-gray-800 border border-gray-700 text-gray-300 rounded-lg px-3 py-1.5 focus:outline-none focus:border-pip-600 cursor-pointer disabled:opacity-40"
+            >
+              {DATE_RANGES.map((r) => (
+                <option key={r.days} value={r.days}>{r.label}</option>
+              ))}
+            </select>
+            <button
+              onClick={() => runInitialAnalysis()}
+              disabled={initializing || loading}
+              className="flex items-center gap-2 px-3 py-1.5 text-sm text-gray-400 hover:text-gray-200 hover:bg-gray-800 rounded-lg transition-colors disabled:opacity-40"
+            >
+              <RefreshCw size={14} className={initializing ? 'animate-spin' : ''} />
+              Refresh
+            </button>
+          </div>
         }
       />
 

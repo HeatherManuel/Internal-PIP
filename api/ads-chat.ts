@@ -60,15 +60,15 @@ AI CREATIVE SETTINGS: All Advantage+ creative features should be OFF (highlight 
 
 When analyzing data, always reference the SOP rules. If something violates a rule (e.g., too many ad sets, modifying winning campaigns), flag it. Be direct and specific — reference actual numbers from the data.`
 
-async function fetchAdsData(): Promise<string> {
+async function fetchAdsData(days: number = 30): Promise<string> {
   const key = process.env.WINDSOR_API_KEY
   const accountId = process.env.WINDSOR_FACEBOOK_ACCOUNT_ID || WINDSOR_ACCOUNT_ID
 
   const today = new Date()
-  const thirtyDaysAgo = new Date(today)
-  thirtyDaysAgo.setDate(today.getDate() - 30)
+  const startDate = new Date(today)
+  startDate.setDate(today.getDate() - days)
   const dateTo   = today.toISOString().split('T')[0]
-  const dateFrom = thirtyDaysAgo.toISOString().split('T')[0]
+  const dateFrom = startDate.toISOString().split('T')[0]
 
   const params = new URLSearchParams({
     api_key:    key ?? '',
@@ -94,16 +94,19 @@ export default async function handler(request: Request): Promise<Response> {
   }
 
   try {
-    const { messages, fetchData } = await request.json() as {
+    const { messages, fetchData, days } = await request.json() as {
       messages: { role: string; content: string }[]
       fetchData?: boolean
+      days?: number
     }
+
+    const rangeDays = Math.min(Math.max(days ?? 30, 1), 90)
 
     let systemPrompt = SYSTEM_PROMPT
 
     if (fetchData) {
-      const adsData = await fetchAdsData()
-      systemPrompt += `\n\nCurrent Facebook Ads data (last 30 days):\n${adsData}`
+      const adsData = await fetchAdsData(rangeDays)
+      systemPrompt += `\n\nCurrent Facebook Ads data (last ${rangeDays} days):\n${adsData}`
     }
 
     const res = await fetch('https://api.anthropic.com/v1/messages', {
