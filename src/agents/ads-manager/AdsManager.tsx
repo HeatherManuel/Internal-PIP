@@ -20,9 +20,8 @@ async function callAdsChat(messages: Message[], fetchData: boolean): Promise<str
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ messages, fetchData }),
   })
-  if (!res.ok) throw new Error('API request failed')
   const data = await res.json() as { content?: string; error?: string }
-  if (data.error) throw new Error(data.error)
+  if (!res.ok || data.error) throw new Error(data.error ?? `HTTP ${res.status}`)
   return data.content ?? 'No response.'
 }
 
@@ -51,10 +50,11 @@ export function AdsManager() {
     try {
       const content = await callAdsChat([userMsg], true)
       setMessages([userMsg, { role: 'assistant', content }])
-    } catch {
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Unknown error'
       setMessages([{
         role: 'assistant',
-        content: '⚠️ Failed to load ad data. Make sure ANTHROPIC_API_KEY and WINDSOR_API_KEY are set in your Vercel environment variables.',
+        content: `⚠️ Failed to load ad data.\n\nError: ${msg}`,
       }])
     } finally {
       setInitializing(false)
