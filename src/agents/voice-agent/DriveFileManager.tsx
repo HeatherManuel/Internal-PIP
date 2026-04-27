@@ -200,7 +200,8 @@ export function DriveFileManager() {
   const [filterType,   setFilterType]   = useState<ContentType | 'all'>('all')
 
   // ── Selection helpers ─────────────────────────────────────────────────────
-  const toggleSelect = (fileId: string) => {
+  const toggleSelect = (fileId: string | null) => {
+    if (!fileId) return
     setSelectedIds((prev) => {
       const next = new Set(prev)
       next.has(fileId) ? next.delete(fileId) : next.add(fileId)
