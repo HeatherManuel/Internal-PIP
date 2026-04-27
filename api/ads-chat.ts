@@ -84,7 +84,12 @@ export default async function handler(request: Request): Promise<Response> {
       }),
     })
 
-    const data = await res.json() as { content?: { text: string }[] }
+    const data = await res.json() as { content?: { text: string }[]; error?: { message: string }; type?: string }
+
+    if (!res.ok || data.type === 'error') {
+      throw new Error(`Anthropic error: ${data.error?.message ?? res.status}`)
+    }
+
     const content = data.content?.[0]?.text ?? 'No response generated.'
 
     return new Response(JSON.stringify({ content }), {
