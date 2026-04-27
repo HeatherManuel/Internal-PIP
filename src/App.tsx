@@ -4,6 +4,7 @@ import { Login } from '@/pages/Login'
 import { Home } from '@/pages/Home'
 import { Settings } from '@/pages/Settings'
 import { VoiceAgent } from '@/agents/voice-agent/VoiceAgent'
+import { AdsManager } from '@/agents/ads-manager/AdsManager'
 import { useAuth } from '@/hooks/useAuth'
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
@@ -36,6 +37,7 @@ export default function App() {
         >
           <Route index element={<Home />} />
           <Route path="agents/voice-agent" element={<VoiceAgent />} />
+          <Route path="agents/ads-manager" element={<AdsManager />} />
           <Route path="settings" element={<Settings />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />

@@ -10,5 +10,13 @@ export const AGENTS: Agent[] = [
     status: 'idle',
     path: '/agents/voice-agent',
   },
-  // Future agents added here
+  {
+    id: 'ads-manager',
+    name: 'Ads Manager',
+    slug: 'ads-manager',
+    description: 'AI-powered Facebook Ads analysis and recommendations for PIP University campaigns.',
+    icon: '📊',
+    status: 'idle',
+    path: '/agents/ads-manager',
+  },
 ]
