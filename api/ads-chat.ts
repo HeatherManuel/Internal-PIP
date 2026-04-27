@@ -26,10 +26,27 @@ When you see a problem, say so directly. When something is working, say that too
 async function fetchAdsData(): Promise<string> {
   const key = process.env.WINDSOR_API_KEY
   const accountId = process.env.WINDSOR_FACEBOOK_ACCOUNT_ID || WINDSOR_ACCOUNT_ID
-  const url = `https://connectors.windsor.ai/facebook?api_key=${key}&date_preset=last_30d&fields=${WINDSOR_FIELDS}&accounts=${accountId}`
+
+  const today = new Date()
+  const thirtyDaysAgo = new Date(today)
+  thirtyDaysAgo.setDate(today.getDate() - 30)
+  const dateTo   = today.toISOString().split('T')[0]
+  const dateFrom = thirtyDaysAgo.toISOString().split('T')[0]
+
+  const params = new URLSearchParams({
+    api_key:    key ?? '',
+    date_from:  dateFrom,
+    date_to:    dateTo,
+    fields:     WINDSOR_FIELDS,
+    account_id: accountId,
+  })
+  const url = `https://connectors.windsor.ai/facebook?${params}`
 
   const res = await fetch(url)
-  if (!res.ok) throw new Error(`Windsor API error: ${res.status}`)
+  if (!res.ok) {
+    const body = await res.text()
+    throw new Error(`Windsor API error: ${res.status} — ${body}`)
+  }
   const json = await res.json()
   return JSON.stringify(json.data ?? json)
 }
