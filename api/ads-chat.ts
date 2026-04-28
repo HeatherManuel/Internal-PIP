@@ -1,7 +1,38 @@
 export const config = { runtime: 'edge' }
 
 const WINDSOR_ACCOUNT_ID = '2837959129738933'
-const WINDSOR_FIELDS = 'campaign,adset_name,spend,impressions,clicks,ctr,cpc,cpm,reach,frequency'
+const WINDSOR_FIELDS = [
+  // Structure
+  'campaign',
+  'adset_name',
+  'ad_name',
+  // Core spend & delivery
+  'spend',
+  'impressions',
+  'reach',
+  'frequency',
+  // Click metrics
+  'clicks',
+  'ctr',
+  'cpc',
+  'unique_clicks',
+  'unique_ctr',
+  'outbound_clicks',
+  'outbound_clicks_ctr',
+  // Cost metrics
+  'cpm',
+  // Video metrics (BOF/MOF ThruPlay campaigns)
+  'video_thruplay_watched_actions',
+  'video_p25_watched_actions',
+  'video_p50_watched_actions',
+  'video_p75_watched_actions',
+  'video_p100_watched_actions',
+  'video_avg_time_watched_actions',
+  'cost_per_thruplay',
+  // Conversion actions (leads, purchases, calls)
+  'actions',
+  'cost_per_action_type',
+].join(',')
 
 // Only Windsor needs a hard timeout — Anthropic streams so there's nothing to time out.
 const WINDSOR_TIMEOUT_MS = 12_000
@@ -63,7 +94,14 @@ AI CREATIVE SETTINGS: All Advantage+ creative features should be OFF (highlight 
 
 ---
 
-DATA ACCESS: You DO have live access to PIP University's Facebook Ads account. Campaign data is automatically pulled from the account via Windsor.ai each time a session starts and is included in this system context. When asked whether you can see the ad account or pull data, confirm that yes — live campaign data has already been loaded for this session and you are analyzing it directly. You do not need the user to paste anything in.
+DATA ACCESS: You DO have live access to PIP University's Facebook Ads account. Campaign data is automatically pulled via Windsor.ai each session and is included below. You have the following metrics for every campaign, ad set, and individual ad — do NOT ask the user to paste or provide any of this:
+- Spend, impressions, reach, frequency
+- Clicks, CTR, CPC, unique clicks, outbound clicks & CTR
+- CPM
+- Video: ThruPlay count, 25/50/75/100% completions, average watch time, cost per ThruPlay
+- All conversion actions (leads, purchases, calls booked) and cost per action
+
+When asked whether you can access the ad account, confirm yes — live data is already loaded. Never ask the user to copy/paste data from Ads Manager.
 
 When analyzing data, always reference the SOP rules. If something violates a rule (e.g., too many ad sets, modifying winning campaigns), flag it. Be direct and specific — reference actual numbers from the data.`
 
