@@ -28,7 +28,15 @@ async function callAdsChat(messages: Message[], fetchData: boolean, days: number
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ messages, fetchData, days }),
   })
-  const data = await res.json() as { content?: string; error?: string }
+
+  let data: { content?: string; error?: string } = {}
+  try {
+    data = await res.json() as { content?: string; error?: string }
+  } catch {
+    // Vercel returned a non-JSON error page (e.g. timeout / crash)
+    throw new Error(res.status === 504 ? 'Request timed out — try a shorter date range.' : `Server error (${res.status}). Please try again.`)
+  }
+
   if (!res.ok || data.error) throw new Error(data.error ?? `HTTP ${res.status}`)
   return data.content ?? 'No response.'
 }
