@@ -22,36 +22,83 @@ const DATE_RANGES = [
   { label: '90 days', days: 90 },
 ]
 
-async function callAdsChat(messages: Message[], fetchData: boolean, days: number): Promise<string> {
+// Calls the API and streams the response back token by token.
+// onChunk is called with the full accumulated text after each token.
+async function callAdsChat(
+  messages: Message[],
+  fetchData: boolean,
+  days: number,
+  onChunk: (accumulated: string) => void,
+): Promise<string> {
   const res = await fetch('/api/ads-chat', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ messages, fetchData, days }),
   })
 
-  let data: { content?: string; error?: string } = {}
-  try {
-    data = await res.json() as { content?: string; error?: string }
-  } catch {
-    // Vercel returned a non-JSON error page (e.g. timeout / crash)
-    throw new Error(res.status === 504 ? 'Request timed out — try a shorter date range.' : `Server error (${res.status}). Please try again.`)
+  const contentType = res.headers.get('Content-Type') ?? ''
+
+  // Non-streaming response = an error JSON from our API
+  if (!contentType.includes('text/event-stream')) {
+    let data: { content?: string; error?: string } = {}
+    try {
+      data = await res.json() as { content?: string; error?: string }
+    } catch {
+      throw new Error(
+        res.status === 504
+          ? 'Request timed out — try a shorter date range.'
+          : `Server error (${res.status}). Please try again.`
+      )
+    }
+    if (!res.ok || data.error) throw new Error(data.error ?? `HTTP ${res.status}`)
+    return data.content ?? 'No response.'
   }
 
-  if (!res.ok || data.error) throw new Error(data.error ?? `HTTP ${res.status}`)
-  return data.content ?? 'No response.'
+  // Parse Anthropic's Server-Sent Events stream
+  const reader = res.body!.getReader()
+  const decoder = new TextDecoder()
+  let fullContent = ''
+  let buffer = ''
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+
+    buffer += decoder.decode(value, { stream: true })
+    const lines = buffer.split('\n')
+    buffer = lines.pop() ?? ''   // hold back any incomplete line
+
+    for (const line of lines) {
+      if (!line.startsWith('data: ')) continue
+      const raw = line.slice(6).trim()
+      if (!raw || raw === '[DONE]') continue
+      try {
+        const parsed = JSON.parse(raw) as {
+          type: string
+          delta?: { type: string; text: string }
+        }
+        if (parsed.type === 'content_block_delta' && parsed.delta?.type === 'text_delta') {
+          fullContent += parsed.delta.text
+          onChunk(fullContent)
+        }
+      } catch {
+        // skip malformed SSE lines
+      }
+    }
+  }
+
+  return fullContent || 'No response.'
 }
 
 export function AdsManager() {
-  const [messages, setMessages] = useState<Message[]>([])
-  const [input, setInput] = useState('')
-  const [loading, setLoading] = useState(false)
+  const [messages,     setMessages]     = useState<Message[]>([])
+  const [input,        setInput]        = useState('')
+  const [loading,      setLoading]      = useState(false)
   const [initializing, setInitializing] = useState(true)
-  const [days, setDays] = useState(30)
+  const [days,         setDays]         = useState(30)
   const bottomRef = useRef<HTMLDivElement>(null)
 
-  useEffect(() => {
-    runInitialAnalysis()
-  }, [])
+  useEffect(() => { runInitialAnalysis() }, [])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -64,9 +111,13 @@ export function AdsManager() {
       role: 'user',
       content: `Give me a performance summary of the current campaigns (last ${selectedDays} days). Highlight what's working, what's not, and your top 3 priorities.`,
     }
+    const assistantMsg: Message = { role: 'assistant', content: '' }
+    setMessages([userMsg, assistantMsg])
+
     try {
-      const content = await callAdsChat([userMsg], true, selectedDays)
-      setMessages([userMsg, { role: 'assistant', content }])
+      await callAdsChat([userMsg], true, selectedDays, (partial) => {
+        setMessages([userMsg, { role: 'assistant', content: partial }])
+      })
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Unknown error'
       setMessages([{
@@ -83,20 +134,29 @@ export function AdsManager() {
     if (!messageText.trim() || loading || initializing) return
 
     const userMsg: Message = { role: 'user', content: messageText }
-    const next = [...messages, userMsg]
-    setMessages(next)
+    const history = [...messages, userMsg]
+    const assistantMsg: Message = { role: 'assistant', content: '' }
+    setMessages([...history, assistantMsg])
     setInput('')
     setLoading(true)
 
     try {
-      const content = await callAdsChat(next, false, days)
-      setMessages([...next, { role: 'assistant', content }])
-    } catch {
-      setMessages([...next, { role: 'assistant', content: 'Error getting response. Please try again.' }])
+      await callAdsChat(history, false, days, (partial) => {
+        setMessages([...history, { role: 'assistant', content: partial }])
+      })
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Unknown error'
+      setMessages([...history, { role: 'assistant', content: `Error: ${msg}` }])
     } finally {
       setLoading(false)
     }
   }
+
+  // Show the typing dots only when we're waiting for the first token
+  const lastMsg = messages[messages.length - 1]
+  const waitingForFirstToken = loading && lastMsg?.role === 'assistant' && lastMsg.content === ''
+  const initWaitingForFirstToken = initializing && lastMsg?.role === 'assistant' && lastMsg.content === ''
+  const showDots = waitingForFirstToken || initWaitingForFirstToken
 
   return (
     <div className="flex flex-col h-[calc(100vh-2rem)]">
@@ -124,7 +184,7 @@ export function AdsManager() {
               disabled={initializing || loading}
               className="flex items-center gap-2 px-3 py-1.5 text-sm text-gray-400 hover:text-gray-200 hover:bg-gray-800 rounded-lg transition-colors disabled:opacity-40"
             >
-              <RefreshCw size={14} className={initializing ? 'animate-spin' : ''} />
+              <RefreshCw size={14} className={(initializing || loading) ? 'animate-spin' : ''} />
               Refresh
             </button>
           </div>
@@ -133,7 +193,7 @@ export function AdsManager() {
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto space-y-4 pb-4 min-h-0">
-        {initializing ? (
+        {initializing && messages.length === 0 ? (
           <div className="pip-card flex items-center gap-3">
             <div className="w-5 h-5 border-2 border-pip-600 border-t-transparent rounded-full animate-spin shrink-0" />
             <p className="text-sm text-gray-400">Fetching campaign data and running analysis...</p>
@@ -149,12 +209,17 @@ export function AdsManager() {
                 }`}
               >
                 {msg.content}
+                {/* Blinking cursor while streaming */}
+                {(loading || initializing) && i === messages.length - 1 && msg.role === 'assistant' && msg.content !== '' && (
+                  <span className="inline-block w-0.5 h-4 bg-gray-400 ml-0.5 animate-pulse align-middle" />
+                )}
               </div>
             </div>
           ))
         )}
 
-        {loading && (
+        {/* Typing dots — only while waiting for first token */}
+        {showDots && (
           <div className="flex justify-start">
             <div className="bg-gray-800 border border-gray-700 rounded-xl px-4 py-3.5">
               <div className="flex gap-1.5 items-center">

@@ -3,10 +3,8 @@ export const config = { runtime: 'edge' }
 const WINDSOR_ACCOUNT_ID = '2837959129738933'
 const WINDSOR_FIELDS = 'campaign,adset_name,spend,impressions,clicks,ctr,cpc,cpm,reach,frequency'
 
-// Edge function timeout budget: Vercel allows 25s on hobby, 30s on pro.
-// Windsor can be slow on wide date ranges — give it 12s, Anthropic 20s.
-const WINDSOR_TIMEOUT_MS  = 12_000
-const ANTHROPIC_TIMEOUT_MS = 20_000
+// Only Windsor needs a hard timeout — Anthropic streams so there's nothing to time out.
+const WINDSOR_TIMEOUT_MS = 12_000
 
 const SYSTEM_PROMPT = `You are an expert Facebook Ads manager for PIP University, an online education platform for salon professionals. You operate according to "The Profitable Ads Procedure" SOP based on the Meta Andromeda algorithm update. You have deep expertise in direct response advertising, funnel strategy, and Meta ad buying.
 
@@ -69,7 +67,7 @@ function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise
   return Promise.race([
     promise,
     new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error(`${label} timed out after ${ms / 1000}s`)), ms)
+      setTimeout(() => reject(new Error(`${label} timed out after ${ms / 1000}s — try a shorter date range.`)), ms)
     ),
   ])
 }
@@ -102,12 +100,16 @@ async function fetchAdsData(days: number = 30): Promise<string> {
   return JSON.stringify(json.data ?? json)
 }
 
+function jsonError(message: string, status = 500): Response {
+  return new Response(JSON.stringify({ error: message }), {
+    status,
+    headers: { 'Content-Type': 'application/json' },
+  })
+}
+
 export default async function handler(request: Request): Promise<Response> {
   if (request.method !== 'POST') {
-    return new Response(JSON.stringify({ error: 'Method not allowed' }), {
-      status: 405,
-      headers: { 'Content-Type': 'application/json' },
-    })
+    return jsonError('Method not allowed', 405)
   }
 
   try {
@@ -126,45 +128,40 @@ export default async function handler(request: Request): Promise<Response> {
       systemPrompt += `\n\nCurrent Facebook Ads data (last ${rangeDays} days):\n${adsData}`
     }
 
-    const anthropicRes = await withTimeout(
-      fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': process.env.ANTHROPIC_API_KEY ?? '',
-          'anthropic-version': '2023-06-01',
-        },
-        body: JSON.stringify({
-          model: 'claude-sonnet-4-6',
-          max_tokens: 1024,
-          system: systemPrompt,
-          messages,
-        }),
+    // Request a streaming response from Anthropic
+    const anthropicRes = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': process.env.ANTHROPIC_API_KEY ?? '',
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 1024,
+        stream: true,
+        system: systemPrompt,
+        messages,
       }),
-      ANTHROPIC_TIMEOUT_MS,
-      'Anthropic API'
-    )
+    })
 
-    const data = await anthropicRes.json() as {
-      content?: { text: string }[]
-      error?: { message: string }
-      type?: string
+    if (!anthropicRes.ok) {
+      // Non-streaming error — parse and forward it
+      const errData = await anthropicRes.json() as { error?: { message: string } }
+      return jsonError(`Anthropic error: ${errData.error?.message ?? anthropicRes.status}`)
     }
 
-    if (!anthropicRes.ok || data.type === 'error') {
-      throw new Error(`Anthropic error: ${data.error?.message ?? anthropicRes.status}`)
-    }
-
-    const content = data.content?.[0]?.text ?? 'No response generated.'
-
-    return new Response(JSON.stringify({ content }), {
-      headers: { 'Content-Type': 'application/json' },
+    // Pipe Anthropic's SSE stream directly to the browser.
+    // As long as bytes are flowing the Vercel edge timeout doesn't fire.
+    return new Response(anthropicRes.body, {
+      headers: {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'X-Accel-Buffering': 'no',
+      },
     })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Internal server error'
-    return new Response(JSON.stringify({ error: message }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-    })
+    return jsonError(message)
   }
 }
