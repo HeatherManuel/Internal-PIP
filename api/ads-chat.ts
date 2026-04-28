@@ -61,6 +61,10 @@ HIGH-TICKET ECONOMICS:
 
 AI CREATIVE SETTINGS: All Advantage+ creative features should be OFF (highlight positive comment OFF, site links OFF, all other AI features OFF).
 
+---
+
+DATA ACCESS: You DO have live access to PIP University's Facebook Ads account. Campaign data is automatically pulled from the account via Windsor.ai each time a session starts and is included in this system context. When asked whether you can see the ad account or pull data, confirm that yes — live campaign data has already been loaded for this session and you are analyzing it directly. You do not need the user to paste anything in.
+
 When analyzing data, always reference the SOP rules. If something violates a rule (e.g., too many ad sets, modifying winning campaigns), flag it. Be direct and specific — reference actual numbers from the data.`
 
 function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
