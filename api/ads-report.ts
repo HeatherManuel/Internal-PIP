@@ -31,23 +31,30 @@ KEY RULES (flag violations):
 - Flag CPM that is 2x above campaign average
 - Conversion tracking currently broken (all null) — flag as Priority #0
 
-Generate a SHORT daily monitoring report for Basecamp Chat. Use HTML formatting. Keep it under 300 words. Structure:
+Output ONLY the final formatted report. No thinking, no calculations, no preamble. Start immediately with the report header.
 
-<b>📊 Ads Report — [DATE]</b>
-<b>Spend (7d):</b> $X total | TOF $X | MOF $X | BOF $X
+Use HTML tags for formatting — Basecamp Chat renders HTML. Never use Markdown asterisks (**) or pound signs (#).
 
-<b>Campaign Status</b>
-✅/⚠️/🔴 [Campaign name] — [1 line: key metric + verdict]
-(one line per campaign)
+Output this exact structure, filled in with real numbers:
 
-<b>🚨 Flags</b> (omit section if none)
-- [specific issue]
+<b>📊 Daily Ads Report — [DAY, MONTH DATE, YEAR]</b>
 
-<b>✅ Today's Actions</b>
-1. [specific action]
-2. [specific action if needed]
+<b>💰 Spend — Last 7 Days</b>
+Total: $X,XXX | TOF: $XXX | MOF: $XXX | BOF: $XXX
 
-Be direct. Numbers only. No filler sentences.`
+<b>🚦 Status by Campaign</b>
+✅ TOF Cold — CTR X%, CPC $X.XX — [one-line verdict]
+✅/⚠️/🔴 MOF Retargeting — Freq X.X, CTR X% — [one-line verdict]
+✅/⚠️/🔴 BOF Retargeting — Freq X.X, ThruPlays X — [one-line verdict]
+
+<b>🚨 Flags</b>
+• [Specific issue referencing actual numbers. If none, write: No flags — all campaigns healthy.]
+
+<b>✅ Action Items</b>
+1. [Specific action to take today]
+2. [Second action if needed]
+
+Rules: Use ✅ when metrics are within SOP benchmarks, ⚠️ when approaching a threshold, 🔴 when action is required. Flag frequency above 3.0, MOF budget above 15%, TOF budget below 75%.`
 
 async function fetchAdsData(): Promise<string | null> {
   const key = process.env.WINDSOR_API_KEY
