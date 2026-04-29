@@ -77,14 +77,16 @@ AI CREATIVE SETTINGS: All Advantage+ creative features should be OFF (highlight 
 
 ---
 
-DATA ACCESS: You DO have live access to PIP University's Facebook Ads account. Campaign data is automatically pulled via Windsor.ai each session and is included below. You have the following metrics for every campaign, ad set, and individual ad — do NOT ask the user to paste or provide any of this:
-- Spend, impressions, reach, frequency
-- Clicks, CTR, CPC, unique clicks, outbound clicks & CTR
-- CPM
-- Video: ThruPlay count, 25/50/75/100% completions, average watch time, cost per ThruPlay
-- All conversion actions (leads, purchases, calls booked) and cost per action
+DATA ACCESS: You have REAL, live access to PIP University's Facebook Ads account via Windsor.ai. This is not theoretical — it is a working API connection. Campaign data is pulled and injected into your context at the start of every session. You MUST NEVER tell the user you don't have access, that the connection is theoretical, or that you can't see their data. That is false and causes serious confusion.
 
-When asked whether you can access the ad account, confirm yes — live data is already loaded. Never ask the user to copy/paste data from Ads Manager.
+If data is present in your context, use it directly — do not ask the user to paste anything.
+If data is missing from your context (Windsor was temporarily unavailable), say "I don't have fresh data loaded right now — hit Refresh to reload it" and nothing else. Do not imply the Windsor connection itself is fake or theoretical.
+
+You have the following metrics per campaign, ad set, and individual ad when data is loaded:
+- Spend, impressions, reach, frequency
+- Clicks, CTR, CPC, outbound clicks, CPM
+- Video: ThruPlay count, 75%/100% completions, cost per ThruPlay
+- All actions tracked
 
 When analyzing data, always reference the SOP rules. If something violates a rule (e.g., too many ad sets, modifying winning campaigns), flag it. Be direct and specific — reference actual numbers from the data.`
 
@@ -197,22 +199,20 @@ export default async function handler(request: Request): Promise<Response> {
 
     let systemPrompt = SYSTEM_PROMPT
 
-    // Inject past session memory + live data in parallel for speed
+    // Always fetch live data + past summaries in parallel — every message gets fresh numbers
     const [pastSummaries, adsData] = await Promise.all([
       fetchPastSummaries(),
-      fetchData ? fetchAdsData(rangeDays) : Promise.resolve(null),
+      fetchAdsData(rangeDays),
     ])
 
     if (pastSummaries) {
       systemPrompt += pastSummaries
     }
 
-    if (fetchData) {
-      if (adsData) {
-        systemPrompt += `\n\nCurrent Facebook Ads data (last ${rangeDays} days):\n${adsData}`
-      } else {
-        systemPrompt += `\n\nNOTE: Live ad data could not be fetched right now (Windsor API unavailable). Let the user know data is temporarily unavailable and ask them to hit Refresh in a moment. You can still answer general SOP and strategy questions.`
-      }
+    if (adsData) {
+      systemPrompt += `\n\nCurrent Facebook Ads data (last ${rangeDays} days):\n${adsData}`
+    } else {
+      systemPrompt += `\n\nNOTE: Live ad data could not be fetched right now (Windsor temporarily unavailable). Tell the user to hit Refresh in a moment to reload data. Do NOT say the Windsor connection is fake or theoretical — it is real, just temporarily unavailable.`
     }
 
     // Request a streaming response from Anthropic
