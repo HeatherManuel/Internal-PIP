@@ -5,7 +5,7 @@
   "crons": [
     {
       "path": "/api/ads-report",
-      "schedule": "0 9 * * 1"
+      "schedule": "0 13 * * 1-5"
     }
   ],
   "rewrites": [
