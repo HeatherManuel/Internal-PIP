@@ -1,24 +1,24 @@
 export const config = { runtime: 'edge' }
 
 const WINDSOR_ACCOUNT_ID = '2837959129738933'
-// Full field set — rich data including video and conversion metrics
+// Primary field set — adds ad-level, video, and conversion data to the basics
 const WINDSOR_FIELDS_FULL = [
   'campaign', 'adset_name', 'ad_name',
   'spend', 'impressions', 'reach', 'frequency',
-  'clicks', 'ctr', 'cpc', 'unique_clicks', 'unique_ctr',
-  'outbound_clicks', 'outbound_clicks_ctr', 'cpm',
+  'clicks', 'ctr', 'cpc', 'cpm',
+  'outbound_clicks',
   'video_thruplay_watched_actions',
-  'video_p25_watched_actions', 'video_p50_watched_actions',
-  'video_p75_watched_actions', 'video_p100_watched_actions',
-  'video_avg_time_watched_actions', 'cost_per_thruplay',
-  'actions', 'cost_per_action_type',
+  'video_p75_watched_actions',
+  'video_p100_watched_actions',
+  'cost_per_thruplay',
+  'actions',
 ].join(',')
 
-// Fallback — fields we know Windsor always supports
+// Fallback — guaranteed fast core fields
 const WINDSOR_FIELDS_BASIC = 'campaign,adset_name,ad_name,spend,impressions,clicks,ctr,cpc,cpm,reach,frequency'
 
 // Only Windsor needs a hard timeout — Anthropic streams so there's nothing to time out.
-const WINDSOR_TIMEOUT_MS = 12_000
+const WINDSOR_TIMEOUT_MS = 15_000
 
 const SYSTEM_PROMPT = `You are an expert Facebook Ads manager for PIP University, an online education platform for salon professionals. You operate according to "The Profitable Ads Procedure" SOP based on the Meta Andromeda algorithm update. You have deep expertise in direct response advertising, funnel strategy, and Meta ad buying.
 
@@ -121,16 +121,23 @@ async function fetchAdsData(days: number = 30): Promise<string> {
   const dateTo   = today.toISOString().split('T')[0]
   const dateFrom = startDate.toISOString().split('T')[0]
 
-  // Try the full rich field set first
-  let res = await windsorFetch(WINDSOR_FIELDS_FULL, dateFrom, dateTo)
+  // Try the full rich field set first — fall back on ANY failure (timeout or bad status)
+  let res: Response | null = null
+  try {
+    res = await windsorFetch(WINDSOR_FIELDS_FULL, dateFrom, dateTo)
+    if (!res.ok) res = null   // treat non-200 as a failure too
+  } catch {
+    res = null
+  }
 
-  // If Windsor rejects the full field list, fall back to basic fields
-  if (!res.ok) {
-    res = await windsorFetch(WINDSOR_FIELDS_BASIC, dateFrom, dateTo)
-    if (!res.ok) {
-      const body = await res.text()
-      throw new Error(`Windsor API error: ${res.status} — ${body}`)
+  // Fall back to basic fields if the full request failed or timed out
+  if (!res) {
+    const fallback = await windsorFetch(WINDSOR_FIELDS_BASIC, dateFrom, dateTo)
+    if (!fallback.ok) {
+      const body = await fallback.text()
+      throw new Error(`Windsor API error: ${fallback.status} — ${body}`)
     }
+    res = fallback
   }
 
   const json = await res.json()
