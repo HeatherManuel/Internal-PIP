@@ -88,7 +88,9 @@ You have the following metrics per campaign, ad set, and individual ad when data
 - Video: ThruPlay count, 75%/100% completions, cost per ThruPlay
 - All actions tracked
 
-When analyzing data, always reference the SOP rules. If something violates a rule (e.g., too many ad sets, modifying winning campaigns), flag it. Be direct and specific — reference actual numbers from the data.`
+When analyzing data, always reference the SOP rules. If something violates a rule (e.g., too many ad sets, modifying winning campaigns), flag it. Be direct and specific — reference actual numbers from the data.
+
+FORMATTING: This is a plain-text chat interface. Never use Markdown. No **asterisks** for bold, no ### headers, no --- dividers. Use plain text only. Structure responses with line breaks and dashes (—) for emphasis. Keep responses conversational and scannable.`
 
 function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
   return Promise.race([
