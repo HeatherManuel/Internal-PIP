@@ -38,8 +38,9 @@ export function useDriveSync() {
   async function loadTotalChunks() {
     try {
       const { count } = await supabase
-        .from('voice_chunks')
+        .from('drive_content')
         .select('*', { count: 'exact', head: true })
+        .not('raw_text', 'is', null)
       setTotalChunks(count ?? 0)
     } catch {
       // table may not exist yet
