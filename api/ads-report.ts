@@ -1,5 +1,4 @@
-// Use standard serverless runtime (not edge) — this job needs more than 25s
-export const config = { maxDuration: 60 }
+export const config = { runtime: 'edge' }
 
 const WINDSOR_ACCOUNT_ID = '2837959129738933'
 const WINDSOR_FIELDS = [
@@ -32,23 +31,23 @@ KEY RULES (flag violations):
 - Flag CPM that is 2x above campaign average
 - Conversion tracking currently broken (all null) — flag as Priority #0
 
-Generate a daily monitoring report. Format it with HTML since it posts to Basecamp Chat. Use this exact structure:
+Generate a SHORT daily monitoring report for Basecamp Chat. Use HTML formatting. Keep it under 300 words. Structure:
 
-<b>📊 Daily Ads Report — [DATE]</b>
+<b>📊 Ads Report — [DATE]</b>
+<b>Spend (7d):</b> $X total | TOF $X | MOF $X | BOF $X
 
-<b>💰 Spend (Last 7 Days)</b>
-[Total spend + breakdown by campaign]
+<b>Campaign Status</b>
+✅/⚠️/🔴 [Campaign name] — [1 line: key metric + verdict]
+(one line per campaign)
 
-<b>🚦 Status by Campaign</b>
-[For each campaign: emoji status (✅ good / ⚠️ watch / 🔴 action needed) + key metrics + one-line verdict]
+<b>🚨 Flags</b> (omit section if none)
+- [specific issue]
 
-<b>🚨 Flags</b>
-[List any rule violations, anomalies, or concerns. If none, say "No flags — all campaigns healthy."]
+<b>✅ Today's Actions</b>
+1. [specific action]
+2. [specific action if needed]
 
-<b>✅ Action Items</b>
-[Numbered list of specific actions to take today, max 3. Be direct — say exactly what to do.]
-
-Be concise and specific. Reference actual numbers. No filler.`
+Be direct. Numbers only. No filler sentences.`
 
 async function fetchAdsData(): Promise<string | null> {
   const key = process.env.WINDSOR_API_KEY
@@ -69,12 +68,17 @@ async function fetchAdsData(): Promise<string | null> {
   })
 
   try {
-    const res = await fetch(`https://connectors.windsor.ai/facebook?${params}`)
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), 8000)
+    const res = await fetch(`https://connectors.windsor.ai/facebook?${params}`, {
+      signal: controller.signal,
+    })
+    clearTimeout(timer)
     if (!res.ok) return null
     const json = await res.json()
     return JSON.stringify(json.data ?? json)
   } catch {
-    return null
+    return null   // timeout or network error — Claude still runs
   }
 }
 
@@ -122,7 +126,7 @@ export default async function handler(request: Request): Promise<Response> {
       },
       body: JSON.stringify({
         model: 'claude-sonnet-4-6',
-        max_tokens: 600,
+        max_tokens: 400,
         system: REPORT_SYSTEM_PROMPT,
         messages: [{ role: 'user', content: userMessage }],
       }),
