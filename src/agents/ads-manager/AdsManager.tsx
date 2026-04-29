@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { Send, RefreshCw } from 'lucide-react'
+import { Send, RefreshCw, Brain } from 'lucide-react'
 import { Header } from '@/components/layout/Header'
 
 interface Message {
@@ -96,13 +96,42 @@ export function AdsManager() {
   const [loading,      setLoading]      = useState(false)
   const [initializing, setInitializing] = useState(true)
   const [days,         setDays]         = useState(30)
+  const [memoryCount,  setMemoryCount]  = useState<number | null>(null)
+  const [saving,       setSaving]       = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
 
-  useEffect(() => { runInitialAnalysis() }, [])
+  useEffect(() => {
+    loadMemoryCount()
+    runInitialAnalysis()
+  }, [])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, loading])
+
+  async function loadMemoryCount() {
+    try {
+      const res = await fetch('/api/ads-memory-count')
+      if (res.ok) {
+        const data = await res.json() as { count: number }
+        setMemoryCount(data.count)
+      }
+    } catch { /* non-critical */ }
+  }
+
+  async function saveSession() {
+    if (messages.length < 4) return
+    setSaving(true)
+    try {
+      await fetch('/api/ads-summarize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages }),
+      })
+      await loadMemoryCount()
+    } catch { /* non-critical — don't block refresh */ }
+    setSaving(false)
+  }
 
   async function runInitialAnalysis(selectedDays = days) {
     setInitializing(true)
@@ -165,14 +194,20 @@ export function AdsManager() {
         subtitle="AI-powered Facebook Ads analysis · PIP University 2"
         actions={
           <div className="flex items-center gap-2">
+            {memoryCount !== null && memoryCount > 0 && (
+              <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-gray-800 border border-gray-700 text-xs text-gray-400">
+                <Brain size={12} className="text-pip-400" />
+                {memoryCount} session{memoryCount !== 1 ? 's' : ''} remembered
+              </div>
+            )}
             <select
               value={days}
               onChange={(e) => {
                 const d = Number(e.target.value)
                 setDays(d)
-                runInitialAnalysis(d)
+                saveSession().then(() => runInitialAnalysis(d))
               }}
-              disabled={initializing || loading}
+              disabled={initializing || loading || saving}
               className="text-sm bg-gray-800 border border-gray-700 text-gray-300 rounded-lg px-3 py-1.5 focus:outline-none focus:border-pip-600 cursor-pointer disabled:opacity-40"
             >
               {DATE_RANGES.map((r) => (
@@ -180,12 +215,12 @@ export function AdsManager() {
               ))}
             </select>
             <button
-              onClick={() => runInitialAnalysis()}
-              disabled={initializing || loading}
+              onClick={() => saveSession().then(() => runInitialAnalysis())}
+              disabled={initializing || loading || saving}
               className="flex items-center gap-2 px-3 py-1.5 text-sm text-gray-400 hover:text-gray-200 hover:bg-gray-800 rounded-lg transition-colors disabled:opacity-40"
             >
               <RefreshCw size={14} className={(initializing || loading) ? 'animate-spin' : ''} />
-              Refresh
+              {saving ? 'Saving…' : 'Refresh'}
             </button>
           </div>
         }

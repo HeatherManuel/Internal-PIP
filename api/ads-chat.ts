@@ -144,6 +144,36 @@ async function fetchAdsData(days: number = 30): Promise<string | null> {
   return null
 }
 
+async function fetchPastSummaries(): Promise<string> {
+  const url = process.env.VITE_SUPABASE_URL
+  const key = process.env.VITE_SUPABASE_ANON_KEY
+  if (!url || !key) return ''
+
+  try {
+    const res = await fetch(
+      `${url}/rest/v1/ads_session_summaries?select=summary,created_at&order=created_at.desc&limit=5`,
+      { headers: { 'apikey': key, 'Authorization': `Bearer ${key}` } }
+    )
+    if (!res.ok) return ''
+    const rows = await res.json() as { summary: string; created_at: string }[]
+    if (!rows.length) return ''
+
+    const formatted = rows
+      .reverse()
+      .map(r => {
+        const date = new Date(r.created_at).toLocaleDateString('en-US', {
+          month: 'short', day: 'numeric', year: 'numeric',
+        })
+        return `[${date}]\n${r.summary}`
+      })
+      .join('\n\n')
+
+    return `\n\n---\n\nPAST SESSION MEMORY (most recent sessions):\n${formatted}\n\nUse this for continuity — reference past decisions, flags, and action items when relevant to the current conversation.`
+  } catch {
+    return ''
+  }
+}
+
 function jsonError(message: string, status = 500): Response {
   return new Response(JSON.stringify({ error: message }), {
     status,
@@ -167,8 +197,17 @@ export default async function handler(request: Request): Promise<Response> {
 
     let systemPrompt = SYSTEM_PROMPT
 
+    // Inject past session memory + live data in parallel for speed
+    const [pastSummaries, adsData] = await Promise.all([
+      fetchPastSummaries(),
+      fetchData ? fetchAdsData(rangeDays) : Promise.resolve(null),
+    ])
+
+    if (pastSummaries) {
+      systemPrompt += pastSummaries
+    }
+
     if (fetchData) {
-      const adsData = await fetchAdsData(rangeDays)
       if (adsData) {
         systemPrompt += `\n\nCurrent Facebook Ads data (last ${rangeDays} days):\n${adsData}`
       } else {
