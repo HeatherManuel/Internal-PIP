@@ -1,38 +1,21 @@
 export const config = { runtime: 'edge' }
 
 const WINDSOR_ACCOUNT_ID = '2837959129738933'
-const WINDSOR_FIELDS = [
-  // Structure
-  'campaign',
-  'adset_name',
-  'ad_name',
-  // Core spend & delivery
-  'spend',
-  'impressions',
-  'reach',
-  'frequency',
-  // Click metrics
-  'clicks',
-  'ctr',
-  'cpc',
-  'unique_clicks',
-  'unique_ctr',
-  'outbound_clicks',
-  'outbound_clicks_ctr',
-  // Cost metrics
-  'cpm',
-  // Video metrics (BOF/MOF ThruPlay campaigns)
+// Full field set — rich data including video and conversion metrics
+const WINDSOR_FIELDS_FULL = [
+  'campaign', 'adset_name', 'ad_name',
+  'spend', 'impressions', 'reach', 'frequency',
+  'clicks', 'ctr', 'cpc', 'unique_clicks', 'unique_ctr',
+  'outbound_clicks', 'outbound_clicks_ctr', 'cpm',
   'video_thruplay_watched_actions',
-  'video_p25_watched_actions',
-  'video_p50_watched_actions',
-  'video_p75_watched_actions',
-  'video_p100_watched_actions',
-  'video_avg_time_watched_actions',
-  'cost_per_thruplay',
-  // Conversion actions (leads, purchases, calls)
-  'actions',
-  'cost_per_action_type',
+  'video_p25_watched_actions', 'video_p50_watched_actions',
+  'video_p75_watched_actions', 'video_p100_watched_actions',
+  'video_avg_time_watched_actions', 'cost_per_thruplay',
+  'actions', 'cost_per_action_type',
 ].join(',')
+
+// Fallback — fields we know Windsor always supports
+const WINDSOR_FIELDS_BASIC = 'campaign,adset_name,ad_name,spend,impressions,clicks,ctr,cpc,cpm,reach,frequency'
 
 // Only Windsor needs a hard timeout — Anthropic streams so there's nothing to time out.
 const WINDSOR_TIMEOUT_MS = 12_000
@@ -114,30 +97,42 @@ function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise
   ])
 }
 
-async function fetchAdsData(days: number = 30): Promise<string> {
+async function windsorFetch(fields: string, dateFrom: string, dateTo: string): Promise<Response> {
   const key = process.env.WINDSOR_API_KEY
   const accountId = process.env.WINDSOR_FACEBOOK_ACCOUNT_ID || WINDSOR_ACCOUNT_ID
+  const params = new URLSearchParams({
+    api_key:    key ?? '',
+    date_from:  dateFrom,
+    date_to:    dateTo,
+    fields,
+    account_id: accountId,
+  })
+  return withTimeout(
+    fetch(`https://connectors.windsor.ai/facebook?${params}`),
+    WINDSOR_TIMEOUT_MS,
+    'Windsor API'
+  )
+}
 
+async function fetchAdsData(days: number = 30): Promise<string> {
   const today = new Date()
   const startDate = new Date(today)
   startDate.setDate(today.getDate() - days)
   const dateTo   = today.toISOString().split('T')[0]
   const dateFrom = startDate.toISOString().split('T')[0]
 
-  const params = new URLSearchParams({
-    api_key:    key ?? '',
-    date_from:  dateFrom,
-    date_to:    dateTo,
-    fields:     WINDSOR_FIELDS,
-    account_id: accountId,
-  })
-  const url = `https://connectors.windsor.ai/facebook?${params}`
+  // Try the full rich field set first
+  let res = await windsorFetch(WINDSOR_FIELDS_FULL, dateFrom, dateTo)
 
-  const res = await withTimeout(fetch(url), WINDSOR_TIMEOUT_MS, 'Windsor API')
+  // If Windsor rejects the full field list, fall back to basic fields
   if (!res.ok) {
-    const body = await res.text()
-    throw new Error(`Windsor API error: ${res.status} — ${body}`)
+    res = await windsorFetch(WINDSOR_FIELDS_BASIC, dateFrom, dateTo)
+    if (!res.ok) {
+      const body = await res.text()
+      throw new Error(`Windsor API error: ${res.status} — ${body}`)
+    }
   }
+
   const json = await res.json()
   return JSON.stringify(json.data ?? json)
 }
