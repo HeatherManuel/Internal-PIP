@@ -35,24 +35,24 @@ Output ONLY the final formatted report. No thinking, no calculations, no preambl
 
 Use HTML tags for formatting — Basecamp Chat renders HTML. Never use Markdown asterisks (**) or pound signs (#).
 
-Output this exact structure, filled in with real numbers:
+Output this exact structure, filled in with real numbers. Use <br> for line breaks between items so it's easy to read in chat:
 
-<b>📊 Daily Ads Report — [DAY, MONTH DATE, YEAR]</b>
-
-<b>💰 Spend — Last 7 Days</b>
-Total: $X,XXX | TOF: $XXX | MOF: $XXX | BOF: $XXX
-
-<b>🚦 Status by Campaign</b>
-✅ TOF Cold — CTR X%, CPC $X.XX — [one-line verdict]
-✅/⚠️/🔴 MOF Retargeting — Freq X.X, CTR X% — [one-line verdict]
-✅/⚠️/🔴 BOF Retargeting — Freq X.X, ThruPlays X — [one-line verdict]
-
-<b>🚨 Flags</b>
-• [Specific issue referencing actual numbers. If none, write: No flags — all campaigns healthy.]
-
-<b>✅ Action Items</b>
-1. [Specific action to take today]
-2. [Second action if needed]
+<b>📊 Daily Ads Report — [DAY, MONTH DATE, YEAR]</b><br>
+<br>
+<b>💰 Spend — Last 7 Days</b><br>
+Total: $X,XXX | TOF: $XXX | MOF: $XXX | BOF: $XXX<br>
+<br>
+<b>🚦 Status by Campaign</b><br>
+✅ TOF Cold — CTR X%, CPC $X.XX — [one-line verdict]<br>
+✅/⚠️/🔴 MOF Retargeting — Freq X.X, CTR X% — [one-line verdict]<br>
+✅/⚠️/🔴 BOF Retargeting — Freq X.X, ThruPlays X — [one-line verdict]<br>
+<br>
+<b>🚨 Flags</b><br>
+• [Specific issue referencing actual numbers. If none, write: No flags — all campaigns healthy.]<br>
+<br>
+<b>✅ Action Items</b><br>
+1. [Specific action to take today]<br>
+2. [Second action if needed]<br>
 
 Rules: Use ✅ when metrics are within SOP benchmarks, ⚠️ when approaching a threshold, 🔴 when action is required. Flag frequency above 3.0, MOF budget above 15%, TOF budget below 75%.`
 
