@@ -1,4 +1,5 @@
-export const config = { runtime: 'edge' }
+// Use standard serverless runtime (not edge) — this job needs more than 25s
+export const config = { maxDuration: 60 }
 
 const WINDSOR_ACCOUNT_ID = '2837959129738933'
 const WINDSOR_FIELDS = [
@@ -121,7 +122,7 @@ export default async function handler(request: Request): Promise<Response> {
       },
       body: JSON.stringify({
         model: 'claude-sonnet-4-6',
-        max_tokens: 1024,
+        max_tokens: 600,
         system: REPORT_SYSTEM_PROMPT,
         messages: [{ role: 'user', content: userMessage }],
       }),
