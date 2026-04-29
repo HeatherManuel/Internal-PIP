@@ -62,7 +62,7 @@ BENCHMARKS:
 - Healthy retargeting frequency: 1.5-3.0 (above 3.5 = fatigue, flag at 3.0)
 - Flag CPM that is 2x above campaign average
 - Minimum test spend before killing: 2x target CAC
-- Conversion tracking is currently broken (all null) — this is ALWAYS priority #0
+- All three campaigns optimize for ThruPlay and engagement — NOT conversions. Null conversion values are expected and normal. Never flag this as an error.
 
 ---
 
