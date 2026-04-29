@@ -17,8 +17,8 @@ const WINDSOR_FIELDS_FULL = [
 // Fallback — guaranteed fast core fields
 const WINDSOR_FIELDS_BASIC = 'campaign,adset_name,ad_name,spend,impressions,clicks,ctr,cpc,cpm,reach,frequency'
 
-// Only Windsor needs a hard timeout — Anthropic streams so there's nothing to time out.
-const WINDSOR_TIMEOUT_MS = 15_000
+// Keep Windsor tight so full + fallback fits well under Vercel's 25s edge limit.
+const WINDSOR_TIMEOUT_MS = 8_000
 
 const SYSTEM_PROMPT = `You are an expert Facebook Ads manager for PIP University, an online education platform for salon professionals. You operate according to "The Profitable Ads Procedure" SOP based on the Meta Andromeda algorithm update. You have deep expertise in direct response advertising, funnel strategy, and Meta ad buying.
 
@@ -114,34 +114,34 @@ async function windsorFetch(fields: string, dateFrom: string, dateTo: string): P
   )
 }
 
-async function fetchAdsData(days: number = 30): Promise<string> {
+// Returns ad data as a JSON string, or null if Windsor can't be reached.
+// Never throws — Windsor failure is non-fatal; Claude still loads without data.
+async function fetchAdsData(days: number = 30): Promise<string | null> {
   const today = new Date()
   const startDate = new Date(today)
   startDate.setDate(today.getDate() - days)
   const dateTo   = today.toISOString().split('T')[0]
   const dateFrom = startDate.toISOString().split('T')[0]
 
-  // Try the full rich field set first — fall back on ANY failure (timeout or bad status)
-  let res: Response | null = null
+  // 1. Try full rich fields
   try {
-    res = await windsorFetch(WINDSOR_FIELDS_FULL, dateFrom, dateTo)
-    if (!res.ok) res = null   // treat non-200 as a failure too
-  } catch {
-    res = null
-  }
-
-  // Fall back to basic fields if the full request failed or timed out
-  if (!res) {
-    const fallback = await windsorFetch(WINDSOR_FIELDS_BASIC, dateFrom, dateTo)
-    if (!fallback.ok) {
-      const body = await fallback.text()
-      throw new Error(`Windsor API error: ${fallback.status} — ${body}`)
+    const res = await windsorFetch(WINDSOR_FIELDS_FULL, dateFrom, dateTo)
+    if (res.ok) {
+      const json = await res.json()
+      return JSON.stringify(json.data ?? json)
     }
-    res = fallback
-  }
+  } catch { /* timeout or network error — fall through */ }
 
-  const json = await res.json()
-  return JSON.stringify(json.data ?? json)
+  // 2. Fall back to basic fields
+  try {
+    const res = await windsorFetch(WINDSOR_FIELDS_BASIC, dateFrom, dateTo)
+    if (res.ok) {
+      const json = await res.json()
+      return JSON.stringify(json.data ?? json)
+    }
+  } catch { /* still failed — return null so Claude loads anyway */ }
+
+  return null
 }
 
 function jsonError(message: string, status = 500): Response {
@@ -169,7 +169,11 @@ export default async function handler(request: Request): Promise<Response> {
 
     if (fetchData) {
       const adsData = await fetchAdsData(rangeDays)
-      systemPrompt += `\n\nCurrent Facebook Ads data (last ${rangeDays} days):\n${adsData}`
+      if (adsData) {
+        systemPrompt += `\n\nCurrent Facebook Ads data (last ${rangeDays} days):\n${adsData}`
+      } else {
+        systemPrompt += `\n\nNOTE: Live ad data could not be fetched right now (Windsor API unavailable). Let the user know data is temporarily unavailable and ask them to hit Refresh in a moment. You can still answer general SOP and strategy questions.`
+      }
     }
 
     // Request a streaming response from Anthropic
