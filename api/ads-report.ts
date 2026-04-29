@@ -56,7 +56,7 @@ Total: $X,XXX | TOF: $XXX (XX%) | MOF: $XXX (XX%) | BOF: $XXX (XX%)<br>
 1. [Specific action to take today]<br>
 2. [Second action if needed]<br>
 
-Rules: Use ✅ within SOP benchmarks, ⚠️ approaching a threshold, 🔴 action required. Flag: frequency above 3.0, MOF budget above 15%, TOF budget below 75%.`
+Rules: Use ✅ within SOP benchmarks, ⚠️ approaching a threshold, 🔴 action required. Flag: frequency above 3.0, MOF budget above 15%, TOF budget below 75%. Keep every bullet and action item to one sentence — be direct, no run-ons. Always finish the report completely before stopping.`
 
 // Raw row from Windsor
 interface AdRow {
@@ -252,7 +252,7 @@ export default async function handler(request: Request): Promise<Response> {
       },
       body: JSON.stringify({
         model:      'claude-sonnet-4-6',
-        max_tokens: 700,
+        max_tokens: 900,
         system:     REPORT_SYSTEM_PROMPT,
         messages:   [{ role: 'user', content: userMessage }],
       }),
