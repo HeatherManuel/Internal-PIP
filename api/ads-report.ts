@@ -193,20 +193,24 @@ async function fetchAdsData(): Promise<string | null> {
     account_id: accountId,
   })
 
-  try {
-    const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), 8000)
-    const res = await fetch(`https://connectors.windsor.ai/facebook?${params}`, {
-      signal: controller.signal,
-    })
-    clearTimeout(timer)
-    if (!res.ok) return null
-    const json = await res.json()
-    const rows: AdRow[] = json.data ?? json
-    return aggregateData(rows)
-  } catch {
-    return null
+  // Try up to 2 times — cron cold starts can be slow
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      const controller = new AbortController()
+      const timer = setTimeout(() => controller.abort(), 10000)
+      const res = await fetch(`https://connectors.windsor.ai/facebook?${params}`, {
+        signal: controller.signal,
+      })
+      clearTimeout(timer)
+      if (!res.ok) continue
+      const json = await res.json()
+      const rows: AdRow[] = json.data ?? json
+      return aggregateData(rows)
+    } catch {
+      // timeout or network error — retry once, then give up
+    }
   }
+  return null
 }
 
 async function postToBasecamp(content: string): Promise<void> {
