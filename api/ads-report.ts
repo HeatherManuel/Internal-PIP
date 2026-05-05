@@ -1,4 +1,4 @@
-export const config = { runtime: 'edge' }
+export const config = { maxDuration: 60 }
 
 const WINDSOR_ACCOUNT_ID = '2837959129738933'
 const WINDSOR_FIELDS = [
@@ -193,11 +193,11 @@ async function fetchAdsData(): Promise<string | null> {
     account_id: accountId,
   })
 
-  // Try up to 2 times — cron cold starts can be slow
-  for (let attempt = 1; attempt <= 2; attempt++) {
+  // Try up to 3 times — cron cold starts can be slow
+  for (let attempt = 1; attempt <= 3; attempt++) {
     try {
       const controller = new AbortController()
-      const timer = setTimeout(() => controller.abort(), 10000)
+      const timer = setTimeout(() => controller.abort(), 20000)
       const res = await fetch(`https://connectors.windsor.ai/facebook?${params}`, {
         signal: controller.signal,
       })
