@@ -1,4 +1,4 @@
-export const config = { maxDuration: 60 }
+export const config = { runtime: 'edge' }
 
 const WINDSOR_ACCOUNT_ID = '2837959129738933'
 const WINDSOR_FIELDS = [
