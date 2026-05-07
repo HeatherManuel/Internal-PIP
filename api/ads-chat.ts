@@ -28,8 +28,9 @@ CAMPAIGN STRUCTURE (PIP University):
 - RLCEO - BOF RETARGETING: Hot leads — VSL page viewers, 75%+ video views, website visitors (90-day window). ABO, ThruPlay optimization, one ad set per belief-shifting video, $3-5/day per ad set, Feeds & Stories only, frequency cap 2x/7 days.
 - RLCEO - MOF RETARGETING: Warm leads — IG/FB engagers, 25%+ video viewers, email list, website visitors. Excludes BOF audience and purchasers. Same structure as BOF but educational/value content.
 - RLCEO - TOF COLD: Cold broad audience — US Female 25-65. ABO, 25-30 unique ads, $150-300/day total. Should have BROAD, INTEREST STACK, and LAL STACK ad sets.
+- RLCEO - C2 - DM LEAD GEN: Also a TOF campaign. Its spend counts as TOF and must be combined with RLCEO - TOF COLD when calculating TOF's percentage of total budget. Never flag C2 as pulling budget away from TOF — they are both TOF.
 
-Budget allocation per SOP: BOF = 5-10%, MOF = 5-15%, TOF = 75-90% of total budget.
+Budget allocation per SOP: BOF = 5-10%, MOF = 5-15%, TOF (TOF COLD + C2 DM LEAD GEN combined) = 75-90% of total budget.
 
 ---
 

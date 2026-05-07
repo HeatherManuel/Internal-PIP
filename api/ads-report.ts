@@ -18,10 +18,11 @@ CAMPAIGN STRUCTURE:
 - BOF RETARGETING: Hot leads. ABO, ThruPlay optimization, $3-5/day per ad set, frequency cap 2x/7 days.
 - MOF RETARGETING: Warm leads. Engagement optimization. Excludes BOF audience and purchasers.
 - TOF COLD: US Female 25-65, broad. ABO, 25-30 unique ads, $150-300/day total.
+- C2 DM LEAD GEN: Also a TOF campaign. Combine its spend with TOF COLD when calculating TOF's percentage of total budget. Never flag C2 as pulling budget away from TOF — they are both TOF.
 
-OPTIMIZATION: All three campaigns optimize for ThruPlay and engagement — NOT conversions. Null conversion values are expected and normal. Never flag missing conversions as an error.
+OPTIMIZATION: All campaigns optimize for ThruPlay and engagement — NOT conversions. Null conversion values are expected and normal. Never flag missing conversions as an error.
 
-Budget allocation: BOF = 5-10%, MOF = 5-15%, TOF = 75-90%.
+Budget allocation: BOF = 5-10%, MOF = 5-15%, TOF (TOF COLD + C2 DM LEAD GEN combined) = 75-90%.
 
 KEY RULES (flag violations):
 - Never modify a winning ad set — only increase budget in place
