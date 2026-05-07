@@ -1,0 +1,34 @@
+name: Daily Ads Report
+
+on:
+  schedule:
+    # 1pm ET (18:00 UTC), Monday–Friday
+    - cron: '0 18 * * 1-5'
+  workflow_dispatch:
+    # Allows manual trigger from GitHub Actions tab
+
+jobs:
+  send-report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+
+    steps:
+      - name: Trigger ads report
+        run: |
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
+            https://internal-pip.vercel.app/api/ads-report \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            --max-time 60)
+
+          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+          BODY=$(echo "$RESPONSE" | head -n-1)
+
+          echo "HTTP Status: $HTTP_CODE"
+          echo "Response: $BODY"
+
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "Report failed with status $HTTP_CODE"
+            exit 1
+          fi
+
+          echo "Report sent successfully"

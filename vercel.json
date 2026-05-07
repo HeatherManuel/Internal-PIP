@@ -2,12 +2,6 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "framework": "vite",
-  "crons": [
-    {
-      "path": "/api/ads-report",
-      "schedule": "0 17 * * 1-5"
-    }
-  ],
   "rewrites": [
     { "source": "/(.*)", "destination": "/" }
   ]
