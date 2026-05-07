@@ -2,6 +2,7 @@ export const config = { runtime: 'edge' }
 
 const WINDSOR_ACCOUNT_ID = '2837959129738933'
 const WINDSOR_FIELDS = [
+  'date_start',
   'campaign', 'adset_name', 'ad_name',
   'spend', 'impressions', 'reach', 'frequency',
   'clicks', 'ctr', 'cpc', 'cpm',
@@ -10,6 +11,7 @@ const WINDSOR_FIELDS = [
   'video_p75_watched_actions',
   'video_p100_watched_actions',
   'cost_per_thruplay',
+  'actions',
 ].join(',')
 
 const REPORT_SYSTEM_PROMPT = `You are an expert Facebook Ads manager for PIP University, an online education platform for salon professionals. You follow "The Profitable Ads Procedure" SOP based on the Meta Andromeda algorithm.
@@ -47,6 +49,8 @@ Total: $X,XXX | TOF: $XXX (XX%) | MOF: $XXX (XX%) | BOF: $XXX (XX%)<br>
 <br>
 <b>🚦 Status by Campaign</b><br>
 ✅/⚠️/🔴 TOF Cold — CTR X%, CPC $X.XX — [one-line verdict]<br>
+✅/⚠️/🔴 C2 DM Lead Gen — Freq X.X, CTR X% — [one-line verdict]<br>
+Messages: [Mon M/D: X | Tue M/D: X | Wed M/D: X | ...one entry per day in the data]<br>
 ✅/⚠️/🔴 MOF Retargeting — Freq X.X, CTR X% — [one-line verdict]<br>
 ✅/⚠️/🔴 BOF Retargeting — Freq X.X, ThruPlays X — [one-line verdict]<br>
 <br>
@@ -61,6 +65,7 @@ Rules: Use ✅ within SOP benchmarks, ⚠️ approaching a threshold, 🔴 actio
 
 // Raw row from Windsor
 interface AdRow {
+  date_start?:  string
   campaign?:    string
   adset_name?:  string
   ad_name?:     string
@@ -72,22 +77,32 @@ interface AdRow {
   cpm?:         number | string
   frequency?:   number | string
   video_thruplay_watched_actions?: number | string
+  actions?:     { action_type: string; value: string }[]
   [key: string]: unknown
 }
 
 interface CampaignSummary {
-  spend:       number
-  impressions: number
-  clicks:      number
-  thruplays:   number
-  adSets:      Map<string, { spend: number; frequency: number; thruplays: number; clicks: number; impressions: number }>
-  ads:         { name: string; spend: number; ctr: number; cpc: number; thruplays: number }[]
+  spend:         number
+  impressions:   number
+  clicks:        number
+  thruplays:     number
+  dailyMessages: Map<string, number>   // date → message count (C2 only)
+  adSets:        Map<string, { spend: number; frequency: number; thruplays: number; clicks: number; impressions: number }>
+  ads:           { name: string; spend: number; ctr: number; cpc: number; thruplays: number }[]
 }
 
 function toNum(v: unknown): number {
   if (typeof v === 'number') return v
   if (typeof v === 'string') return parseFloat(v) || 0
   return 0
+}
+
+// Extract message conversions from a Windsor actions array
+function extractMessages(actions?: { action_type: string; value: string }[]): number {
+  if (!actions) return 0
+  return actions
+    .filter(a => a.action_type.includes('messaging_conversation_started') || a.action_type.includes('onsite_conversion.messaging'))
+    .reduce((sum, a) => sum + (parseInt(a.value, 10) || 0), 0)
 }
 
 // Pre-aggregate Windsor rows into clean per-campaign summaries
@@ -97,7 +112,7 @@ function aggregateData(rows: AdRow[]): string {
   for (const row of rows) {
     const camp = row.campaign ?? 'Unknown'
     if (!campaigns.has(camp)) {
-      campaigns.set(camp, { spend: 0, impressions: 0, clicks: 0, thruplays: 0, adSets: new Map(), ads: [] })
+      campaigns.set(camp, { spend: 0, impressions: 0, clicks: 0, thruplays: 0, dailyMessages: new Map(), adSets: new Map(), ads: [] })
     }
     const c = campaigns.get(camp)!
     const spend      = toNum(row.spend)
@@ -110,6 +125,15 @@ function aggregateData(rows: AdRow[]): string {
     c.impressions += impressions
     c.clicks      += clicks
     c.thruplays   += thruplays
+
+    // Track daily message conversions (C2 DM Lead Gen campaign)
+    if (camp.toLowerCase().includes('c2') || camp.toLowerCase().includes('dm lead')) {
+      const msgCount = extractMessages(row.actions)
+      if (msgCount > 0 && row.date_start) {
+        const date = row.date_start
+        c.dailyMessages.set(date, (c.dailyMessages.get(date) ?? 0) + msgCount)
+      }
+    }
 
     // Roll up ad set level
     const adSetKey = row.adset_name ?? 'Unknown'
@@ -161,6 +185,15 @@ function aggregateData(rows: AdRow[]): string {
       .slice(0, 8)
       .map(a => ({ name: a.name, spend: +a.spend.toFixed(2), thruplays: a.thruplays }))
 
+    // Build sorted daily messages list (oldest → newest)
+    const dailyMessages = Array.from(c.dailyMessages.entries())
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([date, count]) => {
+        const d = new Date(date)
+        const label = d.toLocaleDateString('en-US', { weekday: 'short', month: 'numeric', day: 'numeric' })
+        return `${label}: ${count}`
+      })
+
     ;(summary.campaigns as Record<string, unknown>)[name] = {
       spend:       +c.spend.toFixed(2),
       spendPct:    `${pct}%`,
@@ -168,6 +201,7 @@ function aggregateData(rows: AdRow[]): string {
       clicks:      c.clicks,
       blendedCTR:  `${campCTR}%`,
       thruplays:   c.thruplays,
+      ...(dailyMessages.length > 0 && { dailyMessages }),
       adSets:      adSetList,
       topAds,
     }
@@ -257,7 +291,7 @@ export default async function handler(request: Request): Promise<Response> {
       },
       body: JSON.stringify({
         model:      'claude-sonnet-4-6',
-        max_tokens: 900,
+        max_tokens: 1100,
         system:     REPORT_SYSTEM_PROMPT,
         messages:   [{ role: 'user', content: userMessage }],
       }),
