@@ -97,6 +97,52 @@ function toNum(v: unknown): number {
   return 0
 }
 
+// Returns today's date as YYYY-MM-DD in Eastern Time
+function todayInET(): string {
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
+}
+
+// Fix 2 — Validate aggregated data before passing to Claude.
+// Returns { valid: true } or { valid: false, reason } with a log-safe summary.
+function validateAggregated(
+  rows: AdRow[],
+  aggregated: string,
+): { valid: true } | { valid: false; reason: string } {
+  const todayET = todayInET()
+
+  // Check: at least one row with today's date (ET)
+  const datesPresent = [...new Set(rows.map(r => r.date_start).filter(Boolean))]
+  if (!rows.some(r => r.date_start === todayET)) {
+    return {
+      valid:  false,
+      reason: `No rows matching today's date in ET (${todayET}). Dates in payload: ${datesPresent.join(', ') || 'none'}`,
+    }
+  }
+
+  // Check: totalSpend > 0 and at least one campaign with non-zero spend
+  const summary = JSON.parse(aggregated) as {
+    totalSpend: number
+    campaigns: Record<string, { spend: number }>
+  }
+
+  if (summary.totalSpend <= 0) {
+    return {
+      valid:  false,
+      reason: `totalSpend is ${summary.totalSpend} — Windsor returned no spend data`,
+    }
+  }
+
+  const campaignSpends = Object.entries(summary.campaigns).map(([n, c]) => `${n}: $${c.spend}`)
+  if (!Object.values(summary.campaigns).some(c => c.spend > 0)) {
+    return {
+      valid:  false,
+      reason: `All campaigns show $0 spend — ${campaignSpends.join(' | ')}`,
+    }
+  }
+
+  return { valid: true }
+}
+
 // Extract message conversions from a Windsor actions array
 function extractMessages(actions?: { action_type: string; value: string }[]): number {
   if (!actions) return 0
@@ -210,6 +256,9 @@ function aggregateData(rows: AdRow[]): string {
   return JSON.stringify(summary, null, 2)
 }
 
+// Fix 1 — Windsor fetch with exponential backoff retry logic.
+// Retries on timeout, 429, 5xx. Bails immediately on 400/401.
+// Returns aggregated string on success, null if all attempts fail.
 async function fetchAdsData(): Promise<string | null> {
   const key = process.env.WINDSOR_API_KEY
   const accountId = process.env.WINDSOR_FACEBOOK_ACCOUNT_ID || WINDSOR_ACCOUNT_ID
@@ -228,23 +277,69 @@ async function fetchAdsData(): Promise<string | null> {
     account_id: accountId,
   })
 
-  // Try up to 3 times — cron cold starts can be slow
+  const PERMANENT_CODES  = new Set([400, 401])
+  const RETRYABLE_CODES  = new Set([429, 500, 502, 503, 504])
+  const BACKOFF_MS       = [2000, 4000, 8000] // delay before attempt 2, 3, 4
+
   for (let attempt = 1; attempt <= 3; attempt++) {
+    // Exponential backoff before every retry (not before the first attempt)
+    if (attempt > 1) {
+      const waitMs = BACKOFF_MS[attempt - 2]
+      console.log(`[Windsor] Attempt ${attempt}: backing off ${waitMs / 1000}s before retry`)
+      await new Promise(r => setTimeout(r, waitMs))
+    }
+
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), 20_000) // 20s per attempt
+
     try {
-      const controller = new AbortController()
-      const timer = setTimeout(() => controller.abort(), 20000)
+      console.log(`[Windsor] Attempt ${attempt}: fetching ${dateFrom} → ${dateTo}`)
       const res = await fetch(`https://connectors.windsor.ai/facebook?${params}`, {
         signal: controller.signal,
       })
       clearTimeout(timer)
-      if (!res.ok) continue
+
+      // Permanent errors — do not retry
+      if (PERMANENT_CODES.has(res.status)) {
+        console.log(`[Windsor] Attempt ${attempt}: HTTP ${res.status} — permanent error, aborting`)
+        return null
+      }
+
+      // Retryable HTTP errors
+      if (!res.ok) {
+        const retryable = RETRYABLE_CODES.has(res.status) ? 'retryable' : 'unexpected'
+        console.log(`[Windsor] Attempt ${attempt}: HTTP ${res.status} (${retryable}) — will retry if attempts remain`)
+        continue
+      }
+
       const json = await res.json()
       const rows: AdRow[] = json.data ?? json
-      return aggregateData(rows)
-    } catch {
-      // timeout or network error — retry once, then give up
+      console.log(`[Windsor] Attempt ${attempt}: received ${rows.length} rows`)
+
+      const aggregated = aggregateData(rows)
+
+      // Fix 2 — validate before handing off to Claude
+      const check = validateAggregated(rows, aggregated)
+      if (!check.valid) {
+        console.log(`[Windsor] Attempt ${attempt}: validation failed — ${check.reason}`)
+        return null
+      }
+
+      console.log(`[Windsor] Attempt ${attempt}: data valid — proceeding`)
+      return aggregated
+
+    } catch (err) {
+      clearTimeout(timer)
+      const isTimeout = err instanceof Error && err.name === 'AbortError'
+      console.log(
+        `[Windsor] Attempt ${attempt}: ${
+          isTimeout ? 'timed out after 20s' : `network error — ${err instanceof Error ? err.message : String(err)}`
+        }`
+      )
     }
   }
+
+  console.log('[Windsor] All 3 attempts exhausted — no valid data returned')
   return null
 }
 
@@ -278,9 +373,27 @@ export default async function handler(request: Request): Promise<Response> {
       weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',
     })
 
-    const userMessage = adsData
-      ? `Generate the daily ads monitoring report for ${today}.\n\nPre-aggregated campaign data (last 7 days, all math already done — use these exact figures):\n${adsData}`
-      : `Generate a brief daily ads report for ${today}. Live data could not be fetched — flag this and ask the team to check the Windsor connection.`
+    // Fix 3 — Windsor failed or data invalid: post a clear notice and exit cleanly.
+    // Never call Claude with bad data — no more N/A reports.
+    if (!adsData) {
+      const failureNotice =
+        `<b>⚠️ Ads Report Unavailable — ${today}</b><br>` +
+        `Windsor did not return valid data after 3 attempts. ` +
+        `The report for ${today} will need to be pulled manually from Meta Ads Manager.`
+      try {
+        await postToBasecamp(failureNotice)
+      } catch (postErr) {
+        console.log(`[Basecamp] Could not post failure notice: ${postErr instanceof Error ? postErr.message : String(postErr)}`)
+      }
+      // Return 200 so GitHub Actions marks the run as successful (failure is handled, not a crash)
+      return new Response(
+        JSON.stringify({ success: false, reason: 'Windsor data unavailable — failure notice posted to Basecamp' }),
+        { headers: { 'Content-Type': 'application/json' } }
+      )
+    }
+
+    // Success path — unchanged
+    const userMessage = `Generate the daily ads monitoring report for ${today}.\n\nPre-aggregated campaign data (last 7 days, all math already done — use these exact figures):\n${adsData}`
 
     const anthropicRes = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
