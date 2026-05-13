@@ -192,7 +192,7 @@ export default async function handler(request: Request): Promise<Response> {
   }
 
   try {
-    const { messages, fetchData, days } = await request.json() as {
+    const { messages, days } = await request.json() as {
       messages: { role: string; content: string }[]
       fetchData?: boolean
       days?: number
